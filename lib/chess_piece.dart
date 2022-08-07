@@ -40,6 +40,7 @@ class Pos {
 
   @override
   int get hashCode => x.hashCode ^ y.hashCode;
+  bool get isValid => x >= 0 && x <= 7 && y >= 0 && y <= 7;
 
   @override
   bool operator ==(Object other) {

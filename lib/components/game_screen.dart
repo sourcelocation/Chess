@@ -99,9 +99,11 @@ class GameScreenState extends State<GameScreen> {
             if (fromPos == toPos) {
               selectedPiecePos = toPos;
             } else if (coordinator.pieceOfTile(fromPos) != null) {
+              if (selectedPieceLegalMoves?.contains(toPos) ?? false) {
+                coordinator.movePiece(fromPos, toPos);
+                deselectPiece();
+              }
               // Todo check moves
-              coordinator.movePiece(fromPos, toPos);
-              deselectPiece();
             }
           });
         });
