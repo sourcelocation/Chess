@@ -1,60 +1,77 @@
+import 'dart:convert';
+
 import 'package:chess/chess_piece.dart';
+import 'package:collection/collection.dart';
+import 'package:flutter/widgets.dart';
+
+class Move {
+  Pos from;
+  Pos to;
+
+  Move(this.from, this.to);
+}
+
+enum CheckStatus { none, check, checkmate }
 
 class GameCoordinator {
+  var test = "test";
   final List<List<ChessPiece?>> pieces;
+  List<Move> unslicedHistory;
+  List<Move> get history {
+    return unslicedHistory; // todo
+  }
+
   PlayerColor currentTurn = PlayerColor.white;
 
-  GameCoordinator(this.pieces);
+  GameCoordinator(this.pieces, this.unslicedHistory);
 
   factory GameCoordinator.newGame() {
-    return GameCoordinator(
+    return GameCoordinator([
       [
-        [
-          ChessPiece(PieceType.rook, PlayerColor.white),
-          ChessPiece(PieceType.knight, PlayerColor.white),
-          ChessPiece(PieceType.bishop, PlayerColor.white),
-          ChessPiece(PieceType.queen, PlayerColor.white),
-          ChessPiece(PieceType.king, PlayerColor.white),
-          ChessPiece(PieceType.bishop, PlayerColor.white),
-          ChessPiece(PieceType.knight, PlayerColor.white),
-          ChessPiece(PieceType.rook, PlayerColor.white),
-        ],
-        [
-          ChessPiece(PieceType.pawn, PlayerColor.white),
-          ChessPiece(PieceType.pawn, PlayerColor.white),
-          ChessPiece(PieceType.pawn, PlayerColor.white),
-          ChessPiece(PieceType.pawn, PlayerColor.white),
-          ChessPiece(PieceType.pawn, PlayerColor.white),
-          ChessPiece(PieceType.pawn, PlayerColor.white),
-          ChessPiece(PieceType.pawn, PlayerColor.white),
-          ChessPiece(PieceType.pawn, PlayerColor.white),
-        ],
-        [null, null, null, null, null, null, null, null],
-        [null, null, null, null, null, null, null, null],
-        [null, null, null, null, null, null, null, null],
-        [null, null, null, null, null, null, null, null],
-        [
-          ChessPiece(PieceType.pawn, PlayerColor.black),
-          ChessPiece(PieceType.pawn, PlayerColor.black),
-          ChessPiece(PieceType.pawn, PlayerColor.black),
-          ChessPiece(PieceType.pawn, PlayerColor.black),
-          ChessPiece(PieceType.pawn, PlayerColor.black),
-          ChessPiece(PieceType.pawn, PlayerColor.black),
-          ChessPiece(PieceType.pawn, PlayerColor.black),
-          ChessPiece(PieceType.pawn, PlayerColor.black),
-        ],
-        [
-          ChessPiece(PieceType.rook, PlayerColor.black),
-          ChessPiece(PieceType.knight, PlayerColor.black),
-          ChessPiece(PieceType.bishop, PlayerColor.black),
-          ChessPiece(PieceType.queen, PlayerColor.black),
-          ChessPiece(PieceType.king, PlayerColor.black),
-          ChessPiece(PieceType.bishop, PlayerColor.black),
-          ChessPiece(PieceType.knight, PlayerColor.black),
-          ChessPiece(PieceType.rook, PlayerColor.black),
-        ],
+        ChessPiece(PieceType.rook, PlayerColor.white),
+        ChessPiece(PieceType.knight, PlayerColor.white),
+        ChessPiece(PieceType.bishop, PlayerColor.white),
+        ChessPiece(PieceType.queen, PlayerColor.white),
+        ChessPiece(PieceType.king, PlayerColor.white),
+        ChessPiece(PieceType.bishop, PlayerColor.white),
+        ChessPiece(PieceType.knight, PlayerColor.white),
+        ChessPiece(PieceType.rook, PlayerColor.white),
       ],
-    );
+      [
+        ChessPiece(PieceType.pawn, PlayerColor.white),
+        ChessPiece(PieceType.pawn, PlayerColor.white),
+        ChessPiece(PieceType.pawn, PlayerColor.white),
+        ChessPiece(PieceType.pawn, PlayerColor.white),
+        ChessPiece(PieceType.pawn, PlayerColor.white),
+        ChessPiece(PieceType.pawn, PlayerColor.white),
+        ChessPiece(PieceType.pawn, PlayerColor.white),
+        ChessPiece(PieceType.pawn, PlayerColor.white),
+      ],
+      [null, null, null, null, null, null, null, null],
+      [null, null, null, null, null, null, null, null],
+      [null, null, null, null, null, null, null, null],
+      [null, null, null, null, null, null, null, null],
+      [
+        ChessPiece(PieceType.pawn, PlayerColor.black),
+        ChessPiece(PieceType.pawn, PlayerColor.black),
+        ChessPiece(PieceType.pawn, PlayerColor.black),
+        ChessPiece(PieceType.pawn, PlayerColor.black),
+        ChessPiece(PieceType.pawn, PlayerColor.black),
+        ChessPiece(PieceType.pawn, PlayerColor.black),
+        ChessPiece(PieceType.pawn, PlayerColor.black),
+        ChessPiece(PieceType.pawn, PlayerColor.black),
+      ],
+      [
+        ChessPiece(PieceType.rook, PlayerColor.black),
+        ChessPiece(PieceType.knight, PlayerColor.black),
+        ChessPiece(PieceType.bishop, PlayerColor.black),
+        ChessPiece(PieceType.queen, PlayerColor.black),
+        ChessPiece(PieceType.king, PlayerColor.black),
+        ChessPiece(PieceType.bishop, PlayerColor.black),
+        ChessPiece(PieceType.knight, PlayerColor.black),
+        ChessPiece(PieceType.rook, PlayerColor.black),
+      ],
+    ], []);
   }
 
   ChessPiece? pieceOfTile(Pos pos) => pieces[pos.y][pos.x];
@@ -67,7 +84,7 @@ class GameCoordinator {
     setPieceOnTile(null, fromPos);
   }
 
-  List<Pos> legalMoves(Pos pos) {
+  List<Pos> _legalMovesWithoutChecks(Pos pos) {
     final piece = pieceOfTile(pos);
     switch (piece?.type) {
       case PieceType.bishop:
@@ -83,6 +100,58 @@ class GameCoordinator {
       default:
         return [Pos(3, 3)];
     }
+  }
+
+  List<Pos> legalMoves(Pos pos) {
+    final piece = pieceOfTile(pos);
+    if (piece == null) {
+      return [];
+    }
+    final moves = _legalMovesWithoutChecks(pos);
+    List<Pos> legalMoves = [];
+    for (final to in moves) {
+      final pieceOnDest = pieceOfTile(to);
+      movePiece(pos, to);
+      if (!_getCheckForPlayer(piece.color)) {
+        legalMoves.add(to);
+      }
+
+      // Undo
+      movePiece(to, pos);
+      setPieceOnTile(pieceOnDest, to);
+    }
+    return legalMoves;
+  }
+
+  bool _getCheckForPlayer(PlayerColor color) {
+    var kingPos = _getKingPosition(color);
+    var check = false;
+    pieces.forEachIndexed((y, r) {
+      r.forEachIndexed((x, p) {
+        if (p == null || p.color == color || check) {
+          return;
+        }
+        var moves = _legalMovesWithoutChecks(Pos(x, y));
+        for (var to in moves) {
+          if (to == kingPos) {
+            check = true;
+          }
+        }
+      });
+    });
+    return check;
+  }
+
+  Pos _getKingPosition(PlayerColor color) {
+    Pos? pos;
+    pieces.forEachIndexed((y, r) {
+      r.forEachIndexed((x, p) {
+        if (p != null && p.type == PieceType.king && p.color == color) {
+          pos = Pos(x, y);
+        }
+      });
+    });
+    return pos!;
   }
 
   // == Pieces ==
@@ -175,6 +244,7 @@ class GameCoordinator {
     }).whereType<Pos>().where((location) => location.isValid).toList();
   }
 
+  // king, knight, pawn
   List<Pos> _generateOffsetMoves(Pos pos, List<List<int>> offsets) {
     return offsets
         .map((dpos) => Pos(pos.x + dpos[0], pos.y + dpos[1]))
