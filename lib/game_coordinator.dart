@@ -87,14 +87,16 @@ class GameCoordinator {
   List<Pos> _legalMovesWithoutChecks(Pos pos) {
     final piece = pieceOfTile(pos);
     switch (piece?.type) {
+      case PieceType.pawn:
+        return _pawnLegalMoves(pos);
+      case PieceType.knight:
+        return _knightLegalMoves(pos);
       case PieceType.bishop:
         return _bishopLegalMoves(pos);
       case PieceType.rook:
         return _rookLegalMoves(pos);
       case PieceType.queen:
         return _queenLegalMoves(pos);
-      case PieceType.knight:
-        return _knightLegalMoves(pos);
       case PieceType.king:
         return _kingLegalMoves(pos);
       default:
@@ -121,6 +123,10 @@ class GameCoordinator {
       setPieceOnTile(pieceOnDest, to);
     }
     return legalMoves;
+  }
+
+  void switchTurn() {
+    currentTurn = currentTurn.inverted;
   }
 
   bool _getCheckForPlayer(PlayerColor color) {
@@ -155,6 +161,45 @@ class GameCoordinator {
   }
 
   // == Pieces ==
+  List<Pos> _pawnLegalMoves(Pos pos) {
+    final piece = pieceOfTile(pos);
+    if (piece == null) {
+      return [];
+    }
+    final color = piece.color;
+    List<Pos> moves = [];
+
+    final pos1Front = pos + Pos(0, color == PlayerColor.white ? 1 : -1);
+    if (pos1Front.isValid) {
+      final piece1Front = pieceOfTile(pos1Front);
+      if (piece1Front == null) {
+        moves.add(pos1Front);
+
+        final pos2Front = pos + Pos(0, color == PlayerColor.white ? 2 : -2);
+        if (pos2Front.isValid) {
+          final piece2Front = pieceOfTile(pos2Front);
+          if (piece2Front == null &&
+              pos.y == (color == PlayerColor.white ? 1 : 6)) {
+            moves.add(pos2Front);
+          }
+        }
+      }
+    }
+
+    for (var dir in [-1, 1]) {
+      final diagPos = pos + Pos(dir, color == PlayerColor.white ? 1 : -1);
+
+      if (diagPos.isValid) {
+        final diagPiece = pieceOfTile(diagPos);
+        if (diagPiece != null && diagPiece.color != color) {
+          moves.add(diagPos);
+        }
+      }
+    }
+
+    return moves;
+  }
+
   List<Pos> _bishopLegalMoves(Pos pos) {
     return <Pos>[
       ..._generateMovesOnLine(pos, 1, 1),

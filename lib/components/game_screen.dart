@@ -72,18 +72,21 @@ class GameScreenState extends State<GameScreen> {
         if (moveImageName != null)
           Image.asset(moveImageName, height: tileSize, width: tileSize),
         Draggable<Pos>(
-          data: pos,
-          feedback: tile,
-          childWhenDragging: SizedBox(width: tileSize, height: tileSize),
-          child: tile,
-          onDragStarted: () {
-            if (piece == null) {
-              deselectPiece();
-            } else {
-              selectPiece(pos);
-            }
-          },
-        ),
+            data: pos,
+            feedback: tile,
+            childWhenDragging: SizedBox(width: tileSize, height: tileSize),
+            child: tile,
+            onDragStarted: () {
+              if (piece == null) {
+                deselectPiece();
+              } else {
+                selectPiece(pos);
+              }
+            },
+            maxSimultaneousDrags: (piece?.color ?? coordinator.currentTurn) ==
+                    coordinator.currentTurn
+                ? null
+                : 0),
       ],
     );
   }
@@ -98,9 +101,10 @@ class GameScreenState extends State<GameScreen> {
           setState(() {
             if (fromPos == toPos) {
               selectedPiecePos = toPos;
-            } else if (coordinator.pieceOfTile(fromPos) != null) {
+            } else {
               if (selectedPieceLegalMoves?.contains(toPos) ?? false) {
                 coordinator.movePiece(fromPos, toPos);
+                coordinator.switchTurn();
                 deselectPiece();
               }
               // Todo check moves

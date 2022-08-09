@@ -9,6 +9,10 @@ extension PlayerColorExtension on PlayerColor {
         return "black";
     }
   }
+
+  PlayerColor get inverted {
+    return this == PlayerColor.white ? PlayerColor.black : PlayerColor.white;
+  }
 }
 
 enum PieceType { pawn, knight, bishop, rook, queen, king }
@@ -45,6 +49,10 @@ class Pos {
   @override
   bool operator ==(Object other) {
     return other is Pos && (x == other.x && y == other.y);
+  }
+
+  Pos operator +(Pos other) {
+    return Pos(x + other.x, y + other.y);
   }
 
   @override
