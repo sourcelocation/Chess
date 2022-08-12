@@ -55,6 +55,10 @@ class Pos {
     return Pos(x + other.x, y + other.y);
   }
 
+  Pos operator -(Pos other) {
+    return Pos(x - other.x, y - other.y);
+  }
+
   @override
   String toString() => "Pos($x, $y)";
 }

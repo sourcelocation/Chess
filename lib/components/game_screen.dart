@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:chess/chess_piece.dart';
-
+import "package:chess/extensions.dart";
 import '../game_coordinator.dart';
 
 class GameScreen extends StatefulWidget {
   @override
   State<StatefulWidget> createState() => GameScreenState();
+
+  const GameScreen({super.key});
 }
 
 class GameScreenState extends State<GameScreen> {
@@ -29,15 +31,19 @@ class GameScreenState extends State<GameScreen> {
         appBar: null,
         body: Container(
             margin: EdgeInsets.all(boardMargin),
-            child: Column(
-                children: [const Spacer(), buildBoard(), const Spacer()])));
+            child: Column(children: [
+              const Spacer(),
+              buildBoard(),
+              Row(children: [const Spacer(), buildControls(), const Spacer()]),
+              const Spacer()
+            ])));
   }
 
   Stack buildBoard() {
     return Stack(
       children: [
         Image.asset(
-          "images/Board Modern.png",
+          "images/Board Modern(5).png",
         ),
         Container(
             margin: EdgeInsets.all(boardBorderSize),
@@ -52,6 +58,42 @@ class GameScreenState extends State<GameScreen> {
             ))
       ],
     );
+  }
+
+  Container buildControls() {
+    return Container(
+        margin: const EdgeInsets.fromLTRB(0, 20, 0, 0),
+        child: Row(
+          children: [
+            IconButton(
+              onPressed: () {
+                setState(() {
+                  coordinator.undo();
+                });
+              },
+              icon: const Icon(
+                Icons.arrow_back_rounded,
+                size: 48,
+              ),
+              padding: const EdgeInsets.all(0),
+              splashRadius: 32,
+            ),
+            const SizedBox(width: 16),
+            IconButton(
+              onPressed: () {
+                setState(() {
+                  coordinator.resetGame();
+                });
+              },
+              icon: const Icon(
+                Icons.refresh_rounded,
+                size: 48,
+              ),
+              padding: const EdgeInsets.all(0),
+              splashRadius: 32,
+            ),
+          ],
+        ));
   }
 
   Stack buildTileContents(Pos pos) {
@@ -72,21 +114,22 @@ class GameScreenState extends State<GameScreen> {
         if (moveImageName != null)
           Image.asset(moveImageName, height: tileSize, width: tileSize),
         Draggable<Pos>(
-            data: pos,
-            feedback: tile,
-            childWhenDragging: SizedBox(width: tileSize, height: tileSize),
-            child: tile,
-            onDragStarted: () {
-              if (piece == null) {
-                deselectPiece();
-              } else {
-                selectPiece(pos);
-              }
-            },
-            maxSimultaneousDrags: (piece?.color ?? coordinator.currentTurn) ==
-                    coordinator.currentTurn
-                ? null
-                : 0),
+          data: pos,
+          feedback: tile,
+          childWhenDragging: SizedBox(width: tileSize, height: tileSize),
+          onDragStarted: () {
+            if (piece == null) {
+              deselectPiece();
+            } else {
+              selectPiece(pos);
+            }
+          },
+          maxSimultaneousDrags: (piece?.color ?? coordinator.currentTurn) ==
+                  coordinator.currentTurn
+              ? null
+              : 0,
+          child: tile,
+        ),
       ],
     );
   }
@@ -103,9 +146,11 @@ class GameScreenState extends State<GameScreen> {
               selectedPiecePos = toPos;
             } else {
               if (selectedPieceLegalMoves?.contains(toPos) ?? false) {
-                coordinator.movePiece(fromPos, toPos);
-                coordinator.switchTurn();
+                coordinator.performMove(Move(fromPos, toPos), true);
                 deselectPiece();
+                final status = coordinator
+                    .getCheckStatusForPlayer(coordinator.currentTurn);
+                showGameEndDialogIfNeeded(status);
               }
               // Todo check moves
             }
@@ -122,8 +167,8 @@ class GameScreenState extends State<GameScreen> {
               quarterTurns: piece.color == PlayerColor.white ? 0 : 2,
               child: Image.asset(
                 piece.fileName,
-                height: tileSize * 0.85,
-                width: tileSize * 0.85,
+                height: tileSize * 0.87,
+                width: tileSize * 0.87,
               ))
           : null,
     );
@@ -141,5 +186,29 @@ class GameScreenState extends State<GameScreen> {
       selectedPiecePos = null;
       selectedPieceLegalMoves = null;
     });
+  }
+
+  void showGameEndDialogIfNeeded(CheckStatus status) {
+    if (status == CheckStatus.checkmate) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(
+            "Checkmate! ${coordinator.currentTurn.inverted.raw.capitalize()} wins"),
+      ));
+      // showDialog(
+      //     context: context,
+      //     builder: (_) => AlertDialog(
+      //           title: const Text("Checkmate!"),
+      //           content: Text(
+      //               "${coordinator.currentTurn.inverted.raw.capitalize()} wins"),
+      //           actions: <Widget>[
+      //             TextButton(
+      //               child: const Text('OK'),
+      //               onPressed: () {
+      //                 Navigator.of(context).pop();
+      //               },
+      //             ),
+      //           ],
+      //         ));
+    }
   }
 }

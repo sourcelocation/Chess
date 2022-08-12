@@ -15,7 +15,7 @@ class Chess extends StatelessWidget {
       theme: ThemeData(
         primarySwatch: Colors.grey,
       ),
-      home: GameScreen(),
+      home: const GameScreen(),
     );
   }
 }

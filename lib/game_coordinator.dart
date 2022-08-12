@@ -1,8 +1,5 @@
-import 'dart:convert';
-
 import 'package:chess/chess_piece.dart';
 import 'package:collection/collection.dart';
-import 'package:flutter/widgets.dart';
 
 class Move {
   Pos from;
@@ -11,22 +8,31 @@ class Move {
   Move(this.from, this.to);
 }
 
-enum CheckStatus { none, check, checkmate }
+enum CheckStatus { none, check, checkmate, draw }
 
 class GameCoordinator {
-  var test = "test";
-  final List<List<ChessPiece?>> pieces;
+  List<List<ChessPiece?>> pieces;
   List<Move> unslicedHistory;
+  int _currentHisoryMoveI = -1;
   List<Move> get history {
-    return unslicedHistory; // todo
+    return _currentHisoryMoveI == -1
+        ? []
+        : unslicedHistory.sublist(0, _currentHisoryMoveI + 1); // todo
   }
 
   PlayerColor currentTurn = PlayerColor.white;
+  ChessPiece? pieceOfTile(Pos pos) => pieces[pos.y][pos.x];
 
   GameCoordinator(this.pieces, this.unslicedHistory);
 
   factory GameCoordinator.newGame() {
-    return GameCoordinator([
+    final coordinator = GameCoordinator([], []);
+    coordinator.resetBoard();
+    return coordinator;
+  }
+
+  void resetBoard() {
+    pieces = [
       [
         ChessPiece(PieceType.rook, PlayerColor.white),
         ChessPiece(PieceType.knight, PlayerColor.white),
@@ -71,17 +77,11 @@ class GameCoordinator {
         ChessPiece(PieceType.knight, PlayerColor.black),
         ChessPiece(PieceType.rook, PlayerColor.black),
       ],
-    ], []);
+    ];
   }
 
-  ChessPiece? pieceOfTile(Pos pos) => pieces[pos.y][pos.x];
-  setPieceOnTile(ChessPiece? piece, Pos pos) {
+  void _setPieceOnTile(ChessPiece? piece, Pos pos) {
     pieces[pos.y][pos.x] = piece;
-  }
-
-  movePiece(fromPos, toPos) {
-    setPieceOnTile(pieceOfTile(fromPos), toPos);
-    setPieceOnTile(null, fromPos);
   }
 
   List<Pos> _legalMovesWithoutChecks(Pos pos) {
@@ -113,20 +113,92 @@ class GameCoordinator {
     List<Pos> legalMoves = [];
     for (final to in moves) {
       final pieceOnDest = pieceOfTile(to);
-      movePiece(pos, to);
+      _movePiece(pos, to);
       if (!_getCheckForPlayer(piece.color)) {
         legalMoves.add(to);
       }
 
       // Undo
-      movePiece(to, pos);
-      setPieceOnTile(pieceOnDest, to);
+      _movePiece(to, pos);
+      _setPieceOnTile(pieceOnDest, to);
     }
     return legalMoves;
   }
 
+  CheckStatus getCheckStatusForPlayer(PlayerColor color) {
+    var check = _getCheckForPlayer(color);
+    var noMoves = true;
+    pieces.forEachIndexed((y, r) {
+      r.forEachIndexed((x, p) {
+        if (p != null && p.color == color) {
+          final moves = legalMoves(Pos(x, y));
+          if (moves.isNotEmpty) {
+            noMoves = false;
+          }
+        }
+      });
+    });
+    if (check && noMoves) {
+      return CheckStatus.checkmate;
+    } else if (check && !noMoves) {
+      return CheckStatus.check;
+    } else if (!check && noMoves) {
+      return CheckStatus.draw;
+    } else {
+      return CheckStatus.none;
+    }
+  }
+
+  void performMove(Move move, bool addToHistory) {
+    // Check if move is En Passant
+    if (pieceOfTile(move.from)?.type == PieceType.pawn) {
+      final enPassantMoveD = move.from - move.to;
+      if (enPassantMoveD.x == 1 || enPassantMoveD.x == -1) {
+        if (pieceOfTile(move.to) == null) {
+          // En Passant move
+          // Remove captured pawn
+          final pawnPos = history.last.to;
+          _setPieceOnTile(null, pawnPos);
+        }
+      }
+    }
+
+    _movePiece(move.from, move.to);
+    switchTurn();
+    if (addToHistory) {
+      addMoveToHistory(move);
+    }
+  }
+
   void switchTurn() {
     currentTurn = currentTurn.inverted;
+  }
+
+  void resetGame() {
+    unslicedHistory.clear();
+    _currentHisoryMoveI = -1;
+    currentTurn = PlayerColor.white;
+    resetBoard();
+  }
+
+  void addMoveToHistory(Move move) {
+    unslicedHistory.add(move);
+    _currentHisoryMoveI = unslicedHistory.length - 1;
+  }
+
+  void undo() {
+    if (_currentHisoryMoveI >= 0) {
+      jumpToMoveInHistory(_currentHisoryMoveI - 1);
+    }
+  }
+
+  void jumpToMoveInHistory(int i) {
+    _currentHisoryMoveI = i;
+  }
+
+  void _movePiece(fromPos, toPos) {
+    _setPieceOnTile(pieceOfTile(fromPos), toPos);
+    _setPieceOnTile(null, fromPos);
   }
 
   bool _getCheckForPlayer(PlayerColor color) {
@@ -189,10 +261,30 @@ class GameCoordinator {
     for (var dir in [-1, 1]) {
       final diagPos = pos + Pos(dir, color == PlayerColor.white ? 1 : -1);
 
-      if (diagPos.isValid) {
-        final diagPiece = pieceOfTile(diagPos);
-        if (diagPiece != null && diagPiece.color != color) {
-          moves.add(diagPos);
+      if (!diagPos.isValid) {
+        continue;
+      }
+      final diagPiece = pieceOfTile(diagPos);
+      if (diagPiece != null && diagPiece.color != color) {
+        moves.add(diagPos);
+      }
+
+      // En passant
+      if (history.isNotEmpty) {
+        final lastMove = history.last;
+        final dxy = lastMove.from - lastMove.to;
+        if (dxy.x == 0 &&
+            dxy.y == (currentTurn == PlayerColor.white ? 2 : -2)) {
+          final enPassantPawnPos = lastMove.to;
+          if (enPassantPawnPos.isValid) {
+            // always true, but just in case
+            final enPassantPawn = pieceOfTile(enPassantPawnPos);
+            if (enPassantPawn != null &&
+                enPassantPawn.type == PieceType.pawn &&
+                enPassantPawn.color != color) {
+              moves.add(diagPos);
+            }
+          }
         }
       }
     }
