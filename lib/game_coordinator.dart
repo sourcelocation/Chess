@@ -174,14 +174,15 @@ class GameCoordinator {
     currentTurn = currentTurn.inverted;
   }
 
-  void resetGame() {
-    unslicedHistory.clear();
+  void resetGame(bool removeHistory) {
+    if (removeHistory) unslicedHistory.clear();
     _currentHisoryMoveI = -1;
     currentTurn = PlayerColor.white;
     resetBoard();
   }
 
   void addMoveToHistory(Move move) {
+    unslicedHistory = history;
     unslicedHistory.add(move);
     _currentHisoryMoveI = unslicedHistory.length - 1;
   }
@@ -193,7 +194,11 @@ class GameCoordinator {
   }
 
   void jumpToMoveInHistory(int i) {
+    resetGame(false);
     _currentHisoryMoveI = i;
+    for (final move in history) {
+      performMove(move, false);
+    }
   }
 
   void _movePiece(fromPos, toPos) {
@@ -272,13 +277,16 @@ class GameCoordinator {
       // En passant
       if (history.isNotEmpty) {
         final lastMove = history.last;
+
+        // Check if the last move was "double" pawn move
         final dxy = lastMove.from - lastMove.to;
         if (dxy.x == 0 &&
             dxy.y == (currentTurn == PlayerColor.white ? 2 : -2)) {
           final enPassantPawnPos = lastMove.to;
-          if (enPassantPawnPos.isValid) {
-            // always true, but just in case
-            final enPassantPawn = pieceOfTile(enPassantPawnPos);
+          final enPassantPawn = pieceOfTile(enPassantPawnPos);
+          // Check if pawn is next to selected
+          if (enPassantPawnPos.y == pos.y &&
+              enPassantPawnPos.x - pos.x == dir) {
             if (enPassantPawn != null &&
                 enPassantPawn.type == PieceType.pawn &&
                 enPassantPawn.color != color) {

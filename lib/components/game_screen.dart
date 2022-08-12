@@ -69,6 +69,7 @@ class GameScreenState extends State<GameScreen> {
               onPressed: () {
                 setState(() {
                   coordinator.undo();
+                  deselectPiece();
                 });
               },
               icon: const Icon(
@@ -82,7 +83,8 @@ class GameScreenState extends State<GameScreen> {
             IconButton(
               onPressed: () {
                 setState(() {
-                  coordinator.resetGame();
+                  coordinator.resetGame(true);
+                  deselectPiece();
                 });
               },
               icon: const Icon(
@@ -191,24 +193,14 @@ class GameScreenState extends State<GameScreen> {
   void showGameEndDialogIfNeeded(CheckStatus status) {
     if (status == CheckStatus.checkmate) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(
-            "Checkmate! ${coordinator.currentTurn.inverted.raw.capitalize()} wins"),
+        content: Container(
+          margin: const EdgeInsets.symmetric(vertical: 10),
+          child: Text(
+            "Checkmate! ${coordinator.currentTurn.inverted.raw.capitalize()} wins 🎉",
+            style: TextStyle(fontSize: 16),
+          ),
+        ),
       ));
-      // showDialog(
-      //     context: context,
-      //     builder: (_) => AlertDialog(
-      //           title: const Text("Checkmate!"),
-      //           content: Text(
-      //               "${coordinator.currentTurn.inverted.raw.capitalize()} wins"),
-      //           actions: <Widget>[
-      //             TextButton(
-      //               child: const Text('OK'),
-      //               onPressed: () {
-      //                 Navigator.of(context).pop();
-      //               },
-      //             ),
-      //           ],
-      //         ));
     }
   }
 }
