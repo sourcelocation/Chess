@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:chess/chess_piece.dart';
 import "package:chess/extensions.dart";
+import 'package:google_mobile_ads/google_mobile_ads.dart';
 import '../game_coordinator.dart';
 
 class GameScreen extends StatefulWidget {
@@ -11,7 +12,8 @@ class GameScreen extends StatefulWidget {
 }
 
 class GameScreenState extends State<GameScreen> {
-  final GameCoordinator coordinator = GameCoordinator.newGame();
+  late final GameCoordinator coordinator =
+      GameCoordinator.newGame(pawnReachedEnd);
 
   // Sizes
   final double boardMargin = 4;
@@ -25,25 +27,38 @@ class GameScreenState extends State<GameScreen> {
   Pos? selectedPiecePos;
   List<Pos>? selectedPieceLegalMoves;
 
+  // Ad
+  int undosLeft = 0;
+  RewardedAd? _rewardedAd;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadRewardedAd();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
         appBar: null,
         body: Container(
-            margin: EdgeInsets.all(boardMargin),
-            child: Column(children: [
-              const Spacer(),
-              buildBoard(),
-              Row(children: [const Spacer(), buildControls(), const Spacer()]),
-              const Spacer()
-            ])));
+          margin: EdgeInsets.all(boardMargin),
+          decoration:
+              const BoxDecoration(color: Color.fromARGB(255, 250, 243, 233)),
+          child: Column(children: [
+            const Spacer(),
+            buildBoard(),
+            Row(children: [const Spacer(), buildControls(), const Spacer()]),
+            const Spacer()
+          ]),
+        ));
   }
 
   Stack buildBoard() {
     return Stack(
       children: [
         Image.asset(
-          "images/Board Modern(5).png",
+          "assets/images/Board Modern.png",
         ),
         Container(
             margin: EdgeInsets.all(boardBorderSize),
@@ -67,10 +82,19 @@ class GameScreenState extends State<GameScreen> {
           children: [
             IconButton(
               onPressed: () {
-                setState(() {
-                  coordinator.undo();
-                  deselectPiece();
-                });
+                if (undosLeft > 0) {
+                  undosLeft -= 1;
+                  setState(() {
+                    coordinator.undo();
+                    deselectPiece();
+                  });
+                } else {
+                  _rewardedAd?.show(onUserEarnedReward:
+                      (AdWithoutView ad, RewardItem rewardItem) {
+                    undosLeft = 9999;
+                    // Reward the user for watching an ad.
+                  });
+                }
               },
               icon: const Icon(
                 Icons.arrow_back_rounded,
@@ -82,6 +106,7 @@ class GameScreenState extends State<GameScreen> {
             const SizedBox(width: 16),
             IconButton(
               onPressed: () {
+                undosLeft = 2;
                 setState(() {
                   coordinator.resetGame(true);
                   deselectPiece();
@@ -109,7 +134,7 @@ class GameScreenState extends State<GameScreen> {
     if (selectedPieceLegalMoves?.contains(pos) ?? false) {
       final moveTypeStr = piece == null ? "move" : "capture";
       final tileColorStr = (pos.x + pos.y) % 2 == 0 ? "black" : "white";
-      moveImageName = "images/${moveTypeStr}_$tileColorStr.png";
+      moveImageName = "assets/images/${moveTypeStr}_$tileColorStr.png";
     }
     return Stack(
       children: [
@@ -148,10 +173,11 @@ class GameScreenState extends State<GameScreen> {
               selectedPiecePos = toPos;
             } else {
               if (selectedPieceLegalMoves?.contains(toPos) ?? false) {
-                coordinator.performMove(Move(fromPos, toPos), true);
+                coordinator.performMove(Move(fromPos, toPos, null), true);
                 deselectPiece();
                 final status = coordinator
                     .getCheckStatusForPlayer(coordinator.currentTurn);
+                playMoveSound();
                 showGameEndDialogIfNeeded(status);
               }
               // Todo check moves
@@ -197,10 +223,86 @@ class GameScreenState extends State<GameScreen> {
           margin: const EdgeInsets.symmetric(vertical: 10),
           child: Text(
             "Checkmate! ${coordinator.currentTurn.inverted.raw.capitalize()} wins 🎉",
-            style: TextStyle(fontSize: 16),
+            style: const TextStyle(fontSize: 16),
           ),
         ),
       ));
     }
+  }
+
+  Widget buildPieceSelectionButton(ChessPiece piece) {
+    return IconButton(
+      onPressed: () {
+        Navigator.of(context, rootNavigator: true).pop('dialog');
+        setState(() {
+          coordinator.addPawnTransform(piece.type);
+        });
+        playMoveSound();
+      },
+      icon: Image.asset(piece.fileName),
+      iconSize: tileSize,
+    );
+  }
+
+  void pawnReachedEnd(Pos pos, PlayerColor color) {
+    showDialog(
+        context: context,
+        builder: (BuildContext context) => AlertDialog(
+            title: const Text('Piece selection'),
+            content: Row(
+              children: [
+                const Spacer(),
+                ...[
+                  ChessPiece(PieceType.knight, color),
+                  ChessPiece(PieceType.bishop, color),
+                  ChessPiece(PieceType.rook, color),
+                  ChessPiece(PieceType.queen, color),
+                ].map((p) => buildPieceSelectionButton(p)).toList(),
+                const Spacer(),
+              ],
+            )));
+  }
+
+  void playMoveSound() {
+    final status = coordinator.getCheckStatusForPlayer(coordinator.currentTurn);
+
+    if (status == CheckStatus.check) {
+      coordinator.checkAudioPlayer.resume();
+    } else if (status == CheckStatus.checkmate) {
+      coordinator.checkmateAudioPlayer.resume();
+    } else if (status == CheckStatus.none) {
+      coordinator.moveAudioPlayer.resume();
+    }
+  }
+
+  void _loadRewardedAd() {
+    RewardedAd.load(
+      adUnitId: "ca-app-pub-6804648379784599/8667941163",
+      request: AdRequest(),
+      rewardedAdLoadCallback: RewardedAdLoadCallback(
+        onAdLoaded: (ad) {
+          print("Ad loaded!");
+          ad.fullScreenContentCallback = FullScreenContentCallback(
+            onAdDismissedFullScreenContent: (ad) {
+              setState(() {
+                ad.dispose();
+                _rewardedAd = null;
+              });
+              _loadRewardedAd();
+            },
+          );
+
+          setState(() {
+            _rewardedAd = ad;
+          });
+        },
+        onAdFailedToLoad: (err) {
+          print('Failed to load a rewarded ad: ${err.message}');
+          if (err.code == 3) {
+            undosLeft = 9999;
+          }
+        },
+      ),
+    );
   }
 }

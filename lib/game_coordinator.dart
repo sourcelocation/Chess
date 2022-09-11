@@ -1,11 +1,13 @@
+import 'package:audioplayers/audioplayers.dart';
 import 'package:chess/chess_piece.dart';
 import 'package:collection/collection.dart';
 
 class Move {
   Pos from;
   Pos to;
+  PieceType? pawnTo;
 
-  Move(this.from, this.to);
+  Move(this.from, this.to, this.pawnTo);
 }
 
 enum CheckStatus { none, check, checkmate, draw }
@@ -21,13 +23,27 @@ class GameCoordinator {
   }
 
   PlayerColor currentTurn = PlayerColor.white;
+  List<bool> allowedCastlings = [true, true, true, true];
   ChessPiece? pieceOfTile(Pos pos) => pieces[pos.y][pos.x];
 
-  GameCoordinator(this.pieces, this.unslicedHistory);
+  // Audio
+  final moveAudioPlayer = AudioPlayer();
+  final checkAudioPlayer = AudioPlayer();
+  final checkmateAudioPlayer = AudioPlayer();
 
-  factory GameCoordinator.newGame() {
-    final coordinator = GameCoordinator([], []);
+  // Callbacks
+  Function pawnReachedEnd;
+
+  GameCoordinator(this.pieces, this.unslicedHistory, this.pawnReachedEnd);
+
+  factory GameCoordinator.newGame(pawnReachedEnd) {
+    final coordinator = GameCoordinator([], [], pawnReachedEnd);
     coordinator.resetBoard();
+    coordinator.moveAudioPlayer.setSource(AssetSource("sounds/Move.wav"));
+    coordinator.checkAudioPlayer.setSource(AssetSource("sounds/Check.wav"));
+    coordinator.checkmateAudioPlayer
+        .setSource(AssetSource("sounds/Checkmate.wav"));
+
     return coordinator;
   }
 
@@ -151,15 +167,45 @@ class GameCoordinator {
 
   void performMove(Move move, bool addToHistory) {
     // Check if move is En Passant
-    if (pieceOfTile(move.from)?.type == PieceType.pawn) {
+    final piece = pieceOfTile(move.from);
+    if (piece?.type == PieceType.pawn) {
       final enPassantMoveD = move.from - move.to;
-      if (enPassantMoveD.x == 1 || enPassantMoveD.x == -1) {
+      if (enPassantMoveD.x.abs() == 1) {
         if (pieceOfTile(move.to) == null) {
           // En Passant move
           // Remove captured pawn
-          final pawnPos = history.last.to;
+          final pawnPos = Pos(move.to.x,
+              move.to.y + (piece?.color == PlayerColor.white ? -1 : 1));
           _setPieceOnTile(null, pawnPos);
         }
+      }
+    }
+
+    // Disabling castling
+    if (piece?.type == PieceType.rook) {
+      if (move.from.y == (piece?.color == PlayerColor.white ? 0 : 7)) {
+        if (move.from.x == 0 || move.from.x == 7) {
+          final i = piece?.color == PlayerColor.white
+              ? (move.from.x == 0 ? 0 : 1)
+              : (move.from.x == 0 ? 2 : 3);
+          if (allowedCastlings[i] == true) {
+            allowedCastlings[i] = false;
+          }
+        }
+      }
+    } else if (piece?.type == PieceType.king) {
+      allowedCastlings[piece?.color == PlayerColor.white ? 0 : 2] = false;
+      allowedCastlings[piece?.color == PlayerColor.white ? 1 : 3] = false;
+    }
+
+    // Castling
+    if (piece?.type == PieceType.king) {
+      final dx = move.from.x - move.to.x;
+      final y = piece?.color == PlayerColor.white ? 0 : 7;
+      if (dx == -2) {
+        _movePiece(Pos(7, y), Pos(5, y));
+      } else if (dx == 2) {
+        _movePiece(Pos(0, y), Pos(3, y));
       }
     }
 
@@ -167,6 +213,14 @@ class GameCoordinator {
     switchTurn();
     if (addToHistory) {
       addMoveToHistory(move);
+      if (piece?.type == PieceType.pawn &&
+          move.to.y == (piece?.color == PlayerColor.white ? 7 : 0)) {
+        pawnReachedEnd(move.to, piece!.color);
+      }
+    }
+
+    if (move.pawnTo != null) {
+      pieceOfTile(move.to)?.type = move.pawnTo!;
     }
   }
 
@@ -178,6 +232,7 @@ class GameCoordinator {
     if (removeHistory) unslicedHistory.clear();
     _currentHisoryMoveI = -1;
     currentTurn = PlayerColor.white;
+    allowedCastlings = [true, true, true, true];
     resetBoard();
   }
 
@@ -199,6 +254,11 @@ class GameCoordinator {
     for (final move in history) {
       performMove(move, false);
     }
+  }
+
+  void addPawnTransform(PieceType type) {
+    history.last.pawnTo = type;
+    pieceOfTile(history.last.to)?.type = type;
   }
 
   void _movePiece(fromPos, toPos) {
@@ -332,16 +392,37 @@ class GameCoordinator {
   }
 
   List<Pos> _kingLegalMoves(Pos pos) {
-    return _generateOffsetMoves(pos, [
-      [-1, -1],
-      [-1, 0],
-      [-1, 1],
-      [0, -1],
-      [0, 1],
-      [1, -1],
-      [1, 0],
-      [1, 1]
-    ]);
+    final color = pieceOfTile(pos)!.color;
+    List<Pos> castlingMoves = [];
+    final y = color == PlayerColor.white ? 0 : 7;
+    // Long Castling
+    if (allowedCastlings[color == PlayerColor.white ? 0 : 2] == true) {
+      if (pieceOfTile(Pos(3, y)) == null &&
+          pieceOfTile(Pos(2, y)) == null &&
+          pieceOfTile(Pos(1, y)) == null) {
+        castlingMoves.add(Pos(2, y));
+      }
+    }
+    // Short Castling
+    if (allowedCastlings[color == PlayerColor.white ? 1 : 3] == true) {
+      if (pieceOfTile(Pos(5, y)) == null && pieceOfTile(Pos(6, y)) == null) {
+        castlingMoves.add(Pos(6, color == PlayerColor.white ? 0 : 7));
+      }
+    }
+    // }
+    return [
+      ..._generateOffsetMoves(pos, [
+        [-1, -1],
+        [-1, 0],
+        [-1, 1],
+        [0, -1],
+        [0, 1],
+        [1, -1],
+        [1, 0],
+        [1, 1]
+      ]),
+      ...castlingMoves
+    ];
   }
 
   List<Pos> _queenLegalMoves(Pos pos) {

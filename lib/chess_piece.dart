@@ -69,5 +69,5 @@ class ChessPiece {
 
   ChessPiece(this.type, this.color);
 
-  String get fileName => "images/${color.raw}_${type.raw}.png";
+  String get fileName => "assets/images/${color.raw}_${type.raw}.png";
 }
